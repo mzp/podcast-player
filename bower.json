@@ -1,0 +1,10 @@
+{
+  "name": "hobiron-player",
+  "version": "1.0.0",
+  "homepage": "https://github.com/mzp/hobiron-player",
+  "authors": [
+    "mzp <mzpppp@gmail.com>"
+  ],
+  "description": "hobiron player",
+  "license": "MIT"
+}
