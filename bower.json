@@ -6,5 +6,8 @@
     "mzp <mzpppp@gmail.com>"
   ],
   "description": "hobiron player",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "~2.4.1"
+  }
 }
