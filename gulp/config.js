@@ -28,5 +28,13 @@ module.exports = {
             new webpack.ResolverPlugin.DirectoryDescriptionFilePlugin("bower.json", ["main"])
         )
     ]
+  },
+
+  // 単純なコピー
+  copy: {
+      src: [
+        src + '/static/index.html'
+      ],
+      dest: dest
   }
 }

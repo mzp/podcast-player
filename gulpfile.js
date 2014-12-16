@@ -5,4 +5,8 @@ requireDir('./gulp/tasks', { recursive: true });
 var gulp = require('gulp');
 gulp.task('compile', ['coffee', 'webpack']);
 
-
+gulp.task('watch', ['webpack'], function() {
+  gulp.watch('src/**/*.coffee', ['coffee']);
+  gulp.watch('temp/**/*.js', ['webpack']);
+  gulp.task('default', ['webpack']);
+});
