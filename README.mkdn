@@ -17,4 +17,4 @@ $ bundle
 $ bundle exec shotgun app.rb
 ```
 
-and access to http://localhost:9393/
+and access to [http://localhost:9393/](http://localhost:9393/)
