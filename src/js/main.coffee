@@ -1,4 +1,6 @@
 _ = require 'lodash'
+Router = require 'router.js/src/router'
+director = require 'director'
 require 'better-xhr/dist/better-xhr'
 Vue = require 'vue'
 utils = require './components/utils'
@@ -20,10 +22,8 @@ window.onload = ->
     methods: {
       fetch: (data, e) ->
         # FIXME: this is view's task. Use some cool filter.
-        # FIXME: validate data.url
         utils.stopEvent e
-        XHR.get("#{location.href}/items?url=#{data.url}").then (items) ->
-          Playlist.items = items
+        router.redirect "#/play?url=#{data.url}"
     }
   })
   new Vue({
@@ -52,3 +52,17 @@ window.onload = ->
           item
     }
   })
+
+#director.Router(routes).init()
+#
+router = new Router()
+router.addRoute '#/play/', (req, next) ->
+  # FIXME: validate data.url
+  url = "#{location.origin}/items?url=#{req.query.url}"
+  XHR.get(url).then (items) ->
+    Playlist.items = items
+
+router.errors 404, (err, href) ->
+  console.log "error: #{href}"
+
+router.run location.hash
