@@ -1,0 +1,6 @@
+{
+    "name": "Podcast player",
+    "description": "HTML5 based Podcast player",
+    "repository": "https://github.com/mzp/podcast-player.git",
+    "keywords": ["podcast", "html5"]
+}
