@@ -5,4 +5,6 @@ exports.shift = (xs) ->
   ys.unshift ys.pop()
   ys
 
-
+exports.stopEvent = (e) ->
+  e.stopPropagation()
+  e.preventDefault()

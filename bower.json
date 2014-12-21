@@ -9,6 +9,7 @@
   "license": "MIT",
   "dependencies": {
     "lodash": "~2.4.1",
-    "vue": "~0.11.4"
+    "vue": "~0.11.4",
+    "better-xhr": "~0.3.1"
   }
 }
