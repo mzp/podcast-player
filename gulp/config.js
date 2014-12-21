@@ -1,12 +1,12 @@
 var path = require("path");
 var webpack = require("webpack");
 
-var dest = './build'; // 出力先ディレクトリ
+var dest = './public'; // 出力先ディレクトリ
 var src = './src';  // ソースディレクトリ
 
 module.exports = {
   // 出力先の指定
-  dest: './build',
+  dest: dest,
 
   // jsのビルド設定
   js: {
