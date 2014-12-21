@@ -59,6 +59,14 @@
 	    items: []
 	  };
 
+	  Vue.filter('short', function(value) {
+	    if (value.length < 20) {
+	      return value;
+	    } else {
+	      return value.substr(0, 20) + "...";
+	    }
+	  });
+
 	  window.onload = function() {
 	    new Vue({
 	      el: '#js-fetcher',

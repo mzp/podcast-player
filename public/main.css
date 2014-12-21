@@ -1,0 +1,20 @@
+.main {
+  margin-top: 70px;
+}
+
+.player, .playlist {
+  margin-top: 20px;
+}
+
+.playlist {
+  height: 450px;
+  overflow: scroll;
+}
+
+.playlist__item {
+  cursor: pointer;
+}
+
+.playlist__badge--stop {
+  display: none;
+}
