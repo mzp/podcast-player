@@ -45,13 +45,17 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	(function() {
-	  var Playlist, Vue, utils, _;
+	  var Playlist, Router, Vue, director, router, utils, _;
 
-	  _ = __webpack_require__(3);
+	  _ = __webpack_require__(4);
 
-	  __webpack_require__(2);
+	  Router = __webpack_require__(2);
 
-	  Vue = __webpack_require__(4);
+	  director = __webpack_require__(5);
+
+	  __webpack_require__(3);
+
+	  Vue = __webpack_require__(6);
 
 	  utils = __webpack_require__(1);
 
@@ -76,9 +80,7 @@
 	      methods: {
 	        fetch: function(data, e) {
 	          utils.stopEvent(e);
-	          return XHR.get("" + location.href + "/items?url=" + data.url).then(function(items) {
-	            return Playlist.items = items;
-	          });
+	          return router.redirect("#/play?url=" + data.url);
 	        }
 	      }
 	    });
@@ -116,6 +118,22 @@
 	    });
 	  };
 
+	  router = new Router();
+
+	  router.addRoute('#/play/', function(req, next) {
+	    var url;
+	    url = "" + location.origin + "/items?url=" + req.query.url;
+	    return XHR.get(url).then(function(items) {
+	      return Playlist.items = items;
+	    });
+	  });
+
+	  router.errors(404, function(err, href) {
+	    return console.log("error: " + href);
+	  });
+
+	  router.run(location.hash);
+
 	}).call(this);
 
 
@@ -126,7 +144,7 @@
 	(function() {
 	  var _;
 
-	  _ = __webpack_require__(3);
+	  _ = __webpack_require__(4);
 
 	  exports.shift = function(xs) {
 	    var ys;
@@ -145,6 +163,552 @@
 
 /***/ },
 /* 2 */
+/***/ function(module, exports, __webpack_require__) {
+
+	/***
+	 * @preserve Router.js
+	 * @version 1.0.0
+	 * @author: Fabrizio Ruggeri
+	 * @website: http://ramielcreations.com/projects/router-js/
+	 * @license GPL-v2
+	 */
+
+
+	/*jshint expr:true */
+	(function(name, definition) {
+	    if (true) module.exports = definition();
+	    else if (typeof define == 'function' && typeof define.amd == 'object') define(definition);
+	    else this[name] = definition();
+	}('Router', function() {
+	    
+	    /**
+	     * Provide Function Bind specification if browser desn't support it
+	     */
+	    if(!Function.prototype.bind) {
+	        Function.prototype.bind = function(object) {
+	            var originalFunction = this, args = Array.prototype.slice.call(arguments); object = args.shift();
+	            return function() {
+	                return originalFunction.apply(object, args.concat(Array.prototype.slice.call(arguments)));
+	            };
+	        };
+	    }
+
+	    /**
+	     * Commodity function to bind hashchange event
+	     * @param {DOMElement} el       Element of DOM
+	     * @param {function} listener Callback
+	     */
+	    function addHashchangeListener( el, listener ){
+	        if (el.addEventListener) {
+	          el.addEventListener('hashchange', listener, false); 
+	        } else if (el.attachEvent)  {
+	          el.attachEvent('hashchange', listener);
+	        }
+	    }
+
+	    /**
+	     * Commodity function to unbind hashchange event
+	     * @param  {DOMElement} el       Element of DOM
+	     * @param  {function} listener Callback
+	     */
+	    function removeHashchangeListener( el, listener ){
+	        if (el.removeEventListener) {
+	          el.removeEventListener('hashchange', listener, false); 
+	        } else if (el.detachEvent)  {
+	          el.detachEvent('hashchange', listener);
+	        }
+	    }
+
+	    /**
+	     * Commodity function to extend parameters and default options
+	     * @return {object} merged objects
+	     */
+	    function extend(){
+	        for(var i=1; i<arguments.length; i++)
+	            for(var key in arguments[i])
+	                if(arguments[i].hasOwnProperty(key))
+	                    arguments[0][key] = arguments[i][key];
+	        return arguments[0];
+	    }
+	    
+	    /**
+	     * Thanks to Sammy.js
+	     */
+	    var PATH_REPLACER = "([^\/\\?]+)",
+	        PATH_NAME_MATCHER = /:([\w\d]+)/g,
+	        PATH_EVERY_MATCHER = /\/\*(?!\*)/,
+	        PATH_EVERY_REPLACER = "\/([^\/\\?]+)",
+	        PATH_EVERY_GLOBAL_MATCHER = /\*{2}/,
+	        PATH_EVERY_GLOBAL_REPLACER = "(.*?)\\??",
+	        LEADING_BACKSLASHES_MATCH = /\/*$/;
+	    
+	    /**
+	     * Http Request constructor
+	     * @param {string} href Url for request object
+	     * @class Request
+	     * @name Request
+	     * @classDesc Class representing a single http request
+	     */
+	    var Request = function(href){
+	        /**
+	         * The href of this request
+	         * @type {string}
+	         * @memberof Request
+	         * @instance
+	         * @name href
+	         * @public
+	         */
+	        this.href = href;
+	        /**
+	         * Contains params with which this request is launched
+	         * @type {object}
+	         * @memberof Request
+	         * @instance
+	         * @name params
+	         * @public
+	         */
+	        this.params;
+	        /**
+	         * GET Query object
+	         * @type {object}
+	         * @memberof Request
+	         * @instance
+	         * @name query
+	         * @public
+	         */
+	        this.query;
+	        /**
+	         * Contains any generic regex matched parameters
+	         * @type {object}
+	         * @memberof Request
+	         * @instance
+	         * @name splat
+	         * @public
+	         */
+	        this.splat;
+	        /**
+	         * If true another route matched the request and you are able to call next
+	         * @type {Boolean}
+	         * @memberof Request
+	         * @instance
+	         * @name hasNext
+	         * @public
+	         */
+	        this.hasNext = false;
+	    };
+
+	    /**
+	     * Return value passed in request using, in order params, query and eventually default_value if provided
+	     * @param {string} key Key of the value to retrieve
+	     * @param {*} default_value Default value if nothing found. Default to nothing
+	     * @return param value
+	     * @memberOf Request
+	     */
+	    Request.prototype.get = function(key, default_value){
+	        return (this.params && this.params[key] !== undefined) ? 
+	                this.params[key]
+	                : (this.query && this.query[key] !== undefined) ?
+	                    this.query[key]
+	                    : (default_value !== undefined) ?
+	                        default_value : undefined;
+	    };
+
+	    /**
+	     * Router construction options
+	     * @typedef {object} Router~Options
+	     * @property {boolean} [ignorecase=true] If false casing matters in routing match
+	     */
+
+
+	    /**
+	     * Construct a router
+	     * @param {Router~Options} [options] Options for the instance of the router
+	     * @class Router
+	     * @name Router
+	     * @classDesc Router main class
+	     */
+	    var Router = function(options) {
+	        this._options = extend({ignorecase: true}, options);
+	        this._routes = [];
+	        this._befores = [];
+	        this._errors = {
+	            '_'     : function(err, url, httpCode) {
+	                if(console && console.warn) console.warn('Router.js : '+httpCode);
+	            },
+	            '_404'  : function(err, url) {
+	                if(console && console.warn) console.warn('404! Unmatched route for url ' + url);
+	            },
+	            '_500'  : function(err, url) {
+	                if(console && console.error) console.error('500! Internal error route for url ' + url);
+	                else{
+	                    throw new Error('500');
+	                }
+	            }
+	        };
+	        this._paused = false;
+	        this._hasChangeHandler = this._onHashChange.bind(this);
+	        addHashchangeListener(window,this._hasChangeHandler);
+	    };
+
+	    /**
+	     * Hander for hashchange event
+	     * @param  {object} e - Event of hashchange
+	     * @return {boolean}   this method returns true
+	     * @memberOf Router
+	     * @private
+	     */
+	    Router.prototype._onHashChange = function(e){
+	        if(!this._paused){
+	            this._route( this._extractFragment(window.location.href) );
+	        }
+	        return true;
+	    };
+	    
+	    /**
+	     * Extract fragments from url (everything after '#')
+	     * @param  {String} url
+	     * @return {String} Route fragment
+	     * @private
+	     * @memberOf Router
+	     */
+	    Router.prototype._extractFragment = function(url){
+	        var hash_index = url.indexOf('#');
+	        return hash_index >= 0 ? url.substring(hash_index) : '#/';
+	    };
+
+	    /**
+	     * Internally launched when an error in route or in nexts happens
+	     * @param {string|number} httpCode The httpCode of the error to thrown
+	     * @param {object} err, Error to thrown
+	     * @param {string} url, Url which generated the error
+	     * @private
+	     * @memberOf Router
+	     */
+	    Router.prototype._throwsRouteError = function( httpCode, err, url ) {
+	        if(this._errors['_'+httpCode] instanceof Function)
+	            this._errors['_'+httpCode](err, url, httpCode);
+	        else{
+	            this._errors._(err, url, httpCode);
+	        }
+	        return false;
+	    };
+	    
+	    
+	    /**
+	     * Build a request object based on passed information
+	     * @param {object} urlObj
+	     * @param {object} params Params of request if any. Not mandatory
+	     * @throw error Error if urlObj is not 
+	     * @return {object} Request object
+	     * @private
+	     * @memberOf Router
+	     */
+	    Router.prototype._buildRequestObject = function(fragmentUrl, params, splat, hasNext){
+	        if(!fragmentUrl)
+	            throw new Error('Unable to compile request object');
+	        var request = new Request(fragmentUrl);
+	        if(params)
+	            request.params = params;
+	        var completeFragment = fragmentUrl.split('?');
+	        if(completeFragment.length == 2){
+	            var queryKeyValue = null;
+	            var queryString = completeFragment[1].split('&');
+	            request.query = {};
+	            for(var i = 0, qLen = queryString.length; i < qLen; i++){
+	                queryKeyValue = queryString[i].split('=');
+	                request.query[decodeURI(queryKeyValue[0])] = decodeURI(queryKeyValue[1].replace(/\+/g, '%20'));
+	            }
+	            request.query;
+	        }
+	        if(splat && splat.length > 0){
+	            request.splats = splat;
+	        }
+	        if(hasNext === true){
+	            request.hasNext = true;
+	        }
+	        return request;
+	    };
+
+	    /**
+	     * Internally launched when routes for current hash are found
+	     * @param {object} urlObj Object of the url which fired this route
+	     * @param {String} url Url which fired this route
+	     * @param {array} matchedIndexes Array of matched indexes
+	     * @private
+	     * @memberOf Router
+	     */
+	    Router.prototype._followRoute = function( fragmentUrl, url, matchedIndexes ) {
+	        var index = matchedIndexes.splice(0, 1), 
+	            route = this._routes[index], 
+	            match = url.match(route.path), 
+	            request, 
+	            params = {},
+	            splat = [];
+	        if(!route){
+	            return this._throwsRouteError(500, new Error('Internal error'), fragmentUrl);
+	        }
+	        /*Combine path parameter name with params passed if any*/
+	        for(var i = 0, len = route.paramNames.length; i < len; i++) {
+	            params[route.paramNames[i]] = match[i + 1];
+	        }
+	        i = i+1;
+	        /*If any other match put them in request splat*/
+	        if( match && i < match.length){
+	            for(var j = i;j< match.length;j++){
+	                splat.push(match[j]);
+	            }
+	        }
+	        /*Build next callback*/
+	        var hasNext = (matchedIndexes.length !== 0);
+	        var next = (
+	            function(uO, u,mI, hasNext){
+	                return function(hasNext, err, error_code){
+	                    if(!hasNext && !err){
+	                        return this._throwsRouteError( 500, 'Cannot call "next" without an error if request.hasNext is false', fragmentUrl );
+	                    }
+	                    if(err) 
+	                        return this._throwsRouteError( error_code || 500, err, fragmentUrl );
+	                    this._followRoute(uO, u, mI);
+	                    }.bind(this, hasNext);
+	                }.bind(this)(fragmentUrl, url, matchedIndexes, hasNext)
+	        );
+	        request = this._buildRequestObject( fragmentUrl, params, splat, hasNext );
+	        route.routeAction(request, next);
+	    };
+	    
+	    /**
+	     * Internally call every registered before
+	     * @param {function[]} befores Array of befores callback
+	     * @param {function} before Actual before
+	     * @param {object} urlObj Object of the url which fired this route
+	     * @param {String} url Url which fired this route
+	     * @param {array} matchedIndexes Array of matched indexes
+	     * @private
+	     * @memberOf Router
+	     */
+	    Router.prototype._routeBefores = function(befores, before, fragmentUrl, url, matchedIndexes) {
+	        var next;
+	        if(befores.length > 0) {
+	            var nextBefore = befores.splice(0, 1);
+	            nextBefore = nextBefore[0];
+	            next = function(err, error_code) {
+	                if(err)
+	                    return this._throwsRouteError( error_code || 500, err, fragmentUrl);
+	                this._routeBefores(befores, nextBefore, fragmentUrl, url, matchedIndexes);
+	            }.bind(this);
+	        } else {
+	            next = function(err, error_code) {
+	                if(err)
+	                    return this._throwsRouteError( error_code || 500, err, fragmentUrl);
+	                this._followRoute(fragmentUrl, url, matchedIndexes);
+	            }.bind(this);
+	        }
+	        before( this._buildRequestObject( fragmentUrl, null, null, true ), next );
+	    };
+	    
+	    /**
+	     * On hashChange route request through registered handler
+	     * @param  {String} fragmentUrl
+	     * @private
+	     * @memberOf Router
+	     */
+	    Router.prototype._route = function( fragmentUrl ) {
+	        var route = '', 
+	            befores = this._befores.slice(),/*Take a copy of befores cause is nedeed to splice them*/ 
+	            matchedIndexes = [],
+	            urlToTest;
+	        var url = fragmentUrl;
+	        if(url.length === 0)
+	            return true;
+	        url = url.replace( LEADING_BACKSLASHES_MATCH, '');
+	        urlToTest = (url.split('?'))[0]
+	              .replace( LEADING_BACKSLASHES_MATCH, '');/*Removes leading backslashes from the end of the url*/
+	        /*Check for all matching indexes*/
+	        for(var p in this._routes) {
+	            if(this._routes.hasOwnProperty(p)) {
+	                route = this._routes[p];
+	                if(route.path.test(urlToTest)) {
+	                    matchedIndexes.push(p);
+	                }
+	            }
+	        }
+	        
+	        if(matchedIndexes.length > 0) {
+	            /*If befores were added call them in order*/
+	            if(befores.length > 0) {
+	                var before = befores.splice(0, 1);
+	                before = before[0];
+	                /*Execute all before consecutively*/
+	                this._routeBefores(befores, before, fragmentUrl, url, matchedIndexes);
+	            } else {
+	                /*Follow all routes*/
+	                this._followRoute(fragmentUrl, url,  matchedIndexes);
+	            }
+	        /*If no route matched, then call 404 error*/
+	        } else {
+	            return this._throwsRouteError(404, null, fragmentUrl);
+	        }
+	    };
+	    
+	    /**
+	     * Pause router to be binded on hashchange
+	     * @return {Router} return this router for chaining
+	     * @memberOf Router
+	    */
+	    Router.prototype.pause = function(){
+	        this._paused = true;
+	        return this;
+	    };
+	    
+	    /**
+	     * Unpause router to be binded on hashchange
+	     * @param   {Boolean} triggerNow - If true evaluate location immediately
+	     * @return {Router} return this router for chaining
+	     * @memberOf Router
+	     */
+	    Router.prototype.play = function(triggerNow){
+	        triggerNow = 'undefined' == typeof triggerNow ? false : triggerNow;
+	        this._paused = false;
+	        if(triggerNow){
+	            this._route( this._extractFragment(window.location.href) );
+	        }
+	        return this;
+	    };
+	    
+	    /**
+	     * Set location but doesn't fire route handler
+	     * @param {String} url - Url to set location to
+	     * @return {Router} return this router for chaining
+	     * @memberOf Router
+	     * 
+	     */
+	    Router.prototype.setLocation = function(url){
+	        window.history.pushState(null,'',url);
+	        return this;
+	    };
+	    
+	    /**
+	     * Set location and fires route handler
+	     * @param {String} url Url to redirect to
+	     * @return {Router} return this router for chaining
+	     * @memberOf Router
+	     */
+	    Router.prototype.redirect = function(url){
+	        this.setLocation(url);
+	        if(!this._paused)
+	            this._route( this._extractFragment(url) );
+	        return this;
+	    };
+
+	    /**
+	     * This callback is called when this route is matched
+	     * @callback Router~routeCallback
+	     * @param {Request} req - the request object
+	     * @param {function} next - Call it next matching route should be fired
+	     */
+
+	    
+	    Router.prototype.addRoute = 
+	    Router.prototype.add = 
+	    Router.prototype.route = 
+	    /**
+	     * Add a routes to possible route match. Alias : route, add, get
+	     * @param {(string|RegExp)} path A string or a regular expression to match
+	     * @param {Router~routeCallback} callback - Is fired on path match
+	     * @memberOf Router
+	     */
+	    Router.prototype.get = function(path, callback) {
+	        var match, 
+	            modifiers = (this._options.ignorecase ? 'i' : ''), 
+	            paramNames = [];
+	        if('string' == typeof path) {
+	            /*Remove leading backslash from the end of the string*/
+	            path = path.replace(LEADING_BACKSLASHES_MATCH,'');
+	            /*Param Names are all the one defined as :param in the path*/
+	            while(( match = PATH_NAME_MATCHER.exec(path)) !== null) {
+	                paramNames.push(match[1]);
+	            }
+	            path = new RegExp(path
+	                          .replace(PATH_NAME_MATCHER, PATH_REPLACER)
+	                          .replace(PATH_EVERY_MATCHER, PATH_EVERY_REPLACER)
+	                          .replace(PATH_EVERY_GLOBAL_MATCHER, PATH_EVERY_GLOBAL_REPLACER) + "(?:\\?.+)?$", modifiers);
+	        }
+	        this._routes.push({
+	            'path' : path,
+	            'paramNames' : paramNames,
+	            'routeAction' : callback
+	        });
+	        return this;
+	    };
+
+
+	    /**
+	     * Adds a before callback. Will be fired before every route
+	     * @param {Router~routeCallback} callback
+	     * @memberOf Router
+	     */
+	    Router.prototype.before = function(callback) {
+	        this._befores.push(callback);
+	        return this;
+	    };
+
+
+	    /**
+	     * This callback is called when this route is matched
+	     * @callback Router~errorCallback
+	     * @param {object} err - the error
+	     * @param {string} href - Href which fired this error
+	     */
+	    
+	    
+	    /**
+	     * Adds error callback handling for Http code
+	     * @param {Number} httpCode Http code to handle just like 404,500 or what else
+	     * @param {Router~errorCallback} callback Handler for error
+	     * @memberOf Router
+	     */
+	    Router.prototype.errors = function(httpCode, callback) {
+	        if(isNaN(httpCode)) {
+	            throw new Error('Invalid code for routes error handling');
+	        }
+	        if(!(callback instanceof Function)){
+	            throw new Error('Invalid callback for routes error handling');
+	        }
+	        httpCode = '_' + httpCode;
+	        this._errors[httpCode] = callback;
+	        return this;
+	    };
+	    
+	    /**
+	     * Run application. Note that calling this is not mandatory. Calling it just force application to evaluate current or passed url
+	     * @param {String} startUrl Url to redirect application on startup. Default is current location
+	     * @memberOf Router
+	     */
+	    Router.prototype.run = function( startUrl ){
+	        if(!startUrl){
+	            startUrl = this._extractFragment(window.location.href);
+	        }
+	        startUrl = startUrl.indexOf('#') === 0 ? startUrl : '#'+startUrl;
+	        this.redirect( startUrl );
+	        return this;
+	    };
+
+	    /**
+	     * Remove every reference to DOM and event listeners
+	     * @return {Router} This router
+	     * @memberOf Router
+	     */
+	    Router.prototype.destroy = function(){
+	        removeHashchangeListener(window, this._hasChangeHandler);
+	        return this;
+	    };
+
+	    return Router;
+	}));
+
+
+/***/ },
+/* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -269,7 +833,7 @@
 	    };
 
 	    if (typeof module !== "undefined" && module.exports) {
-	        Promise = __webpack_require__(5);
+	        Promise = __webpack_require__(7);
 	    } else {
 	        Promise = global.Promise;
 	    }
@@ -279,7 +843,7 @@
 
 
 /***/ },
-/* 3 */
+/* 4 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/* WEBPACK VAR INJECTION */(function(module, global) {/**
@@ -7440,10 +8004,740 @@
 	  }
 	}.call(this));
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(6)(module), (function() { return this; }())))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(8)(module), (function() { return this; }())))
 
 /***/ },
-/* 4 */
+/* 5 */
+/***/ function(module, exports, __webpack_require__) {
+
+	
+
+	//
+	// Generated on Sat Dec 06 2014 16:08:09 GMT-0500 (EST) by Charlie Robbins, Paolo Fragomeni & the Contributors (Using Codesurgeon).
+	// Version 1.2.4
+	//
+
+	(function (exports) {
+
+	/*
+	 * browser.js: Browser specific functionality for director.
+	 *
+	 * (C) 2011, Charlie Robbins, Paolo Fragomeni, & the Contributors.
+	 * MIT LICENSE
+	 *
+	 */
+
+	var dloc = document.location;
+
+	function dlocHashEmpty() {
+	  // Non-IE browsers return '' when the address bar shows '#'; Director's logic
+	  // assumes both mean empty.
+	  return dloc.hash === '' || dloc.hash === '#';
+	}
+
+	var listener = {
+	  mode: 'modern',
+	  hash: dloc.hash,
+	  history: false,
+
+	  check: function () {
+	    var h = dloc.hash;
+	    if (h != this.hash) {
+	      this.hash = h;
+	      this.onHashChanged();
+	    }
+	  },
+
+	  fire: function () {
+	    if (this.mode === 'modern') {
+	      this.history === true ? window.onpopstate() : window.onhashchange();
+	    }
+	    else {
+	      this.onHashChanged();
+	    }
+	  },
+
+	  init: function (fn, history) {
+	    var self = this;
+	    this.history = history;
+
+	    if (!Router.listeners) {
+	      Router.listeners = [];
+	    }
+
+	    function onchange(onChangeEvent) {
+	      for (var i = 0, l = Router.listeners.length; i < l; i++) {
+	        Router.listeners[i](onChangeEvent);
+	      }
+	    }
+
+	    //note IE8 is being counted as 'modern' because it has the hashchange event
+	    if ('onhashchange' in window && (document.documentMode === undefined
+	      || document.documentMode > 7)) {
+	      // At least for now HTML5 history is available for 'modern' browsers only
+	      if (this.history === true) {
+	        // There is an old bug in Chrome that causes onpopstate to fire even
+	        // upon initial page load. Since the handler is run manually in init(),
+	        // this would cause Chrome to run it twise. Currently the only
+	        // workaround seems to be to set the handler after the initial page load
+	        // http://code.google.com/p/chromium/issues/detail?id=63040
+	        setTimeout(function() {
+	          window.onpopstate = onchange;
+	        }, 500);
+	      }
+	      else {
+	        window.onhashchange = onchange;
+	      }
+	      this.mode = 'modern';
+	    }
+	    else {
+	      //
+	      // IE support, based on a concept by Erik Arvidson ...
+	      //
+	      var frame = document.createElement('iframe');
+	      frame.id = 'state-frame';
+	      frame.style.display = 'none';
+	      document.body.appendChild(frame);
+	      this.writeFrame('');
+
+	      if ('onpropertychange' in document && 'attachEvent' in document) {
+	        document.attachEvent('onpropertychange', function () {
+	          if (event.propertyName === 'location') {
+	            self.check();
+	          }
+	        });
+	      }
+
+	      window.setInterval(function () { self.check(); }, 50);
+
+	      this.onHashChanged = onchange;
+	      this.mode = 'legacy';
+	    }
+
+	    Router.listeners.push(fn);
+
+	    return this.mode;
+	  },
+
+	  destroy: function (fn) {
+	    if (!Router || !Router.listeners) {
+	      return;
+	    }
+
+	    var listeners = Router.listeners;
+
+	    for (var i = listeners.length - 1; i >= 0; i--) {
+	      if (listeners[i] === fn) {
+	        listeners.splice(i, 1);
+	      }
+	    }
+	  },
+
+	  setHash: function (s) {
+	    // Mozilla always adds an entry to the history
+	    if (this.mode === 'legacy') {
+	      this.writeFrame(s);
+	    }
+
+	    if (this.history === true) {
+	      window.history.pushState({}, document.title, s);
+	      // Fire an onpopstate event manually since pushing does not obviously
+	      // trigger the pop event.
+	      this.fire();
+	    } else {
+	      dloc.hash = (s[0] === '/') ? s : '/' + s;
+	    }
+	    return this;
+	  },
+
+	  writeFrame: function (s) {
+	    // IE support...
+	    var f = document.getElementById('state-frame');
+	    var d = f.contentDocument || f.contentWindow.document;
+	    d.open();
+	    d.write("<script>_hash = '" + s + "'; onload = parent.listener.syncHash;<script>");
+	    d.close();
+	  },
+
+	  syncHash: function () {
+	    // IE support...
+	    var s = this._hash;
+	    if (s != dloc.hash) {
+	      dloc.hash = s;
+	    }
+	    return this;
+	  },
+
+	  onHashChanged: function () {}
+	};
+
+	var Router = exports.Router = function (routes) {
+	  if (!(this instanceof Router)) return new Router(routes);
+
+	  this.params   = {};
+	  this.routes   = {};
+	  this.methods  = ['on', 'once', 'after', 'before'];
+	  this.scope    = [];
+	  this._methods = {};
+
+	  this._insert = this.insert;
+	  this.insert = this.insertEx;
+
+	  this.historySupport = (window.history != null ? window.history.pushState : null) != null
+
+	  this.configure();
+	  this.mount(routes || {});
+	};
+
+	Router.prototype.init = function (r) {
+	  var self = this
+	    , routeTo;
+	  this.handler = function(onChangeEvent) {
+	    var newURL = onChangeEvent && onChangeEvent.newURL || window.location.hash;
+	    var url = self.history === true ? self.getPath() : newURL.replace(/.*#/, '');
+	    self.dispatch('on', url.charAt(0) === '/' ? url : '/' + url);
+	  };
+
+	  listener.init(this.handler, this.history);
+
+	  if (this.history === false) {
+	    if (dlocHashEmpty() && r) {
+	      dloc.hash = r;
+	    } else if (!dlocHashEmpty()) {
+	      self.dispatch('on', '/' + dloc.hash.replace(/^(#\/|#|\/)/, ''));
+	    }
+	  }
+	  else {
+	    if (this.convert_hash_in_init) {
+	      // Use hash as route
+	      routeTo = dlocHashEmpty() && r ? r : !dlocHashEmpty() ? dloc.hash.replace(/^#/, '') : null;
+	      if (routeTo) {
+	        window.history.replaceState({}, document.title, routeTo);
+	      }
+	    }
+	    else {
+	      // Use canonical url
+	      routeTo = this.getPath();
+	    }
+
+	    // Router has been initialized, but due to the chrome bug it will not
+	    // yet actually route HTML5 history state changes. Thus, decide if should route.
+	    if (routeTo || this.run_in_init === true) {
+	      this.handler();
+	    }
+	  }
+
+	  return this;
+	};
+
+	Router.prototype.explode = function () {
+	  var v = this.history === true ? this.getPath() : dloc.hash;
+	  if (v.charAt(1) === '/') { v=v.slice(1) }
+	  return v.slice(1, v.length).split("/");
+	};
+
+	Router.prototype.setRoute = function (i, v, val) {
+	  var url = this.explode();
+
+	  if (typeof i === 'number' && typeof v === 'string') {
+	    url[i] = v;
+	  }
+	  else if (typeof val === 'string') {
+	    url.splice(i, v, s);
+	  }
+	  else {
+	    url = [i];
+	  }
+
+	  listener.setHash(url.join('/'));
+	  return url;
+	};
+
+	//
+	// ### function insertEx(method, path, route, parent)
+	// #### @method {string} Method to insert the specific `route`.
+	// #### @path {Array} Parsed path to insert the `route` at.
+	// #### @route {Array|function} Route handlers to insert.
+	// #### @parent {Object} **Optional** Parent "routes" to insert into.
+	// insert a callback that will only occur once per the matched route.
+	//
+	Router.prototype.insertEx = function(method, path, route, parent) {
+	  if (method === "once") {
+	    method = "on";
+	    route = function(route) {
+	      var once = false;
+	      return function() {
+	        if (once) return;
+	        once = true;
+	        return route.apply(this, arguments);
+	      };
+	    }(route);
+	  }
+	  return this._insert(method, path, route, parent);
+	};
+
+	Router.prototype.getRoute = function (v) {
+	  var ret = v;
+
+	  if (typeof v === "number") {
+	    ret = this.explode()[v];
+	  }
+	  else if (typeof v === "string"){
+	    var h = this.explode();
+	    ret = h.indexOf(v);
+	  }
+	  else {
+	    ret = this.explode();
+	  }
+
+	  return ret;
+	};
+
+	Router.prototype.destroy = function () {
+	  listener.destroy(this.handler);
+	  return this;
+	};
+
+	Router.prototype.getPath = function () {
+	  var path = window.location.pathname;
+	  if (path.substr(0, 1) !== '/') {
+	    path = '/' + path;
+	  }
+	  return path;
+	};
+	function _every(arr, iterator) {
+	  for (var i = 0; i < arr.length; i += 1) {
+	    if (iterator(arr[i], i, arr) === false) {
+	      return;
+	    }
+	  }
+	}
+
+	function _flatten(arr) {
+	  var flat = [];
+	  for (var i = 0, n = arr.length; i < n; i++) {
+	    flat = flat.concat(arr[i]);
+	  }
+	  return flat;
+	}
+
+	function _asyncEverySeries(arr, iterator, callback) {
+	  if (!arr.length) {
+	    return callback();
+	  }
+	  var completed = 0;
+	  (function iterate() {
+	    iterator(arr[completed], function(err) {
+	      if (err || err === false) {
+	        callback(err);
+	        callback = function() {};
+	      } else {
+	        completed += 1;
+	        if (completed === arr.length) {
+	          callback();
+	        } else {
+	          iterate();
+	        }
+	      }
+	    });
+	  })();
+	}
+
+	function paramifyString(str, params, mod) {
+	  mod = str;
+	  for (var param in params) {
+	    if (params.hasOwnProperty(param)) {
+	      mod = params[param](str);
+	      if (mod !== str) {
+	        break;
+	      }
+	    }
+	  }
+	  return mod === str ? "([._a-zA-Z0-9-]+)" : mod;
+	}
+
+	function regifyString(str, params) {
+	  var matches, last = 0, out = "";
+	  while (matches = str.substr(last).match(/[^\w\d\- %@&]*\*[^\w\d\- %@&]*/)) {
+	    last = matches.index + matches[0].length;
+	    matches[0] = matches[0].replace(/^\*/, "([_.()!\\ %@&a-zA-Z0-9-]+)");
+	    out += str.substr(0, matches.index) + matches[0];
+	  }
+	  str = out += str.substr(last);
+	  var captures = str.match(/:([^\/]+)/ig), capture, length;
+	  if (captures) {
+	    length = captures.length;
+	    for (var i = 0; i < length; i++) {
+	      capture = captures[i];
+	      if (capture.slice(0, 2) === "::") {
+	        str = capture.slice(1);
+	      } else {
+	        str = str.replace(capture, paramifyString(capture, params));
+	      }
+	    }
+	  }
+	  return str;
+	}
+
+	function terminator(routes, delimiter, start, stop) {
+	  var last = 0, left = 0, right = 0, start = (start || "(").toString(), stop = (stop || ")").toString(), i;
+	  for (i = 0; i < routes.length; i++) {
+	    var chunk = routes[i];
+	    if (chunk.indexOf(start, last) > chunk.indexOf(stop, last) || ~chunk.indexOf(start, last) && !~chunk.indexOf(stop, last) || !~chunk.indexOf(start, last) && ~chunk.indexOf(stop, last)) {
+	      left = chunk.indexOf(start, last);
+	      right = chunk.indexOf(stop, last);
+	      if (~left && !~right || !~left && ~right) {
+	        var tmp = routes.slice(0, (i || 1) + 1).join(delimiter);
+	        routes = [ tmp ].concat(routes.slice((i || 1) + 1));
+	      }
+	      last = (right > left ? right : left) + 1;
+	      i = 0;
+	    } else {
+	      last = 0;
+	    }
+	  }
+	  return routes;
+	}
+
+	var QUERY_SEPARATOR = /\?.*/;
+
+	Router.prototype.configure = function(options) {
+	  options = options || {};
+	  for (var i = 0; i < this.methods.length; i++) {
+	    this._methods[this.methods[i]] = true;
+	  }
+	  this.recurse = options.recurse || this.recurse || false;
+	  this.async = options.async || false;
+	  this.delimiter = options.delimiter || "/";
+	  this.strict = typeof options.strict === "undefined" ? true : options.strict;
+	  this.notfound = options.notfound;
+	  this.resource = options.resource;
+	  this.history = options.html5history && this.historySupport || false;
+	  this.run_in_init = this.history === true && options.run_handler_in_init !== false;
+	  this.convert_hash_in_init = this.history === true && options.convert_hash_in_init !== false;
+	  this.every = {
+	    after: options.after || null,
+	    before: options.before || null,
+	    on: options.on || null
+	  };
+	  return this;
+	};
+
+	Router.prototype.param = function(token, matcher) {
+	  if (token[0] !== ":") {
+	    token = ":" + token;
+	  }
+	  var compiled = new RegExp(token, "g");
+	  this.params[token] = function(str) {
+	    return str.replace(compiled, matcher.source || matcher);
+	  };
+	  return this;
+	};
+
+	Router.prototype.on = Router.prototype.route = function(method, path, route) {
+	  var self = this;
+	  if (!route && typeof path == "function") {
+	    route = path;
+	    path = method;
+	    method = "on";
+	  }
+	  if (Array.isArray(path)) {
+	    return path.forEach(function(p) {
+	      self.on(method, p, route);
+	    });
+	  }
+	  if (path.source) {
+	    path = path.source.replace(/\\\//ig, "/");
+	  }
+	  if (Array.isArray(method)) {
+	    return method.forEach(function(m) {
+	      self.on(m.toLowerCase(), path, route);
+	    });
+	  }
+	  path = path.split(new RegExp(this.delimiter));
+	  path = terminator(path, this.delimiter);
+	  this.insert(method, this.scope.concat(path), route);
+	};
+
+	Router.prototype.path = function(path, routesFn) {
+	  var self = this, length = this.scope.length;
+	  if (path.source) {
+	    path = path.source.replace(/\\\//ig, "/");
+	  }
+	  path = path.split(new RegExp(this.delimiter));
+	  path = terminator(path, this.delimiter);
+	  this.scope = this.scope.concat(path);
+	  routesFn.call(this, this);
+	  this.scope.splice(length, path.length);
+	};
+
+	Router.prototype.dispatch = function(method, path, callback) {
+	  var self = this, fns = this.traverse(method, path.replace(QUERY_SEPARATOR, ""), this.routes, ""), invoked = this._invoked, after;
+	  this._invoked = true;
+	  if (!fns || fns.length === 0) {
+	    this.last = [];
+	    if (typeof this.notfound === "function") {
+	      this.invoke([ this.notfound ], {
+	        method: method,
+	        path: path
+	      }, callback);
+	    }
+	    return false;
+	  }
+	  if (this.recurse === "forward") {
+	    fns = fns.reverse();
+	  }
+	  function updateAndInvoke() {
+	    self.last = fns.after;
+	    self.invoke(self.runlist(fns), self, callback);
+	  }
+	  after = this.every && this.every.after ? [ this.every.after ].concat(this.last) : [ this.last ];
+	  if (after && after.length > 0 && invoked) {
+	    if (this.async) {
+	      this.invoke(after, this, updateAndInvoke);
+	    } else {
+	      this.invoke(after, this);
+	      updateAndInvoke();
+	    }
+	    return true;
+	  }
+	  updateAndInvoke();
+	  return true;
+	};
+
+	Router.prototype.invoke = function(fns, thisArg, callback) {
+	  var self = this;
+	  var apply;
+	  if (this.async) {
+	    apply = function(fn, next) {
+	      if (Array.isArray(fn)) {
+	        return _asyncEverySeries(fn, apply, next);
+	      } else if (typeof fn == "function") {
+	        fn.apply(thisArg, (fns.captures || []).concat(next));
+	      }
+	    };
+	    _asyncEverySeries(fns, apply, function() {
+	      if (callback) {
+	        callback.apply(thisArg, arguments);
+	      }
+	    });
+	  } else {
+	    apply = function(fn) {
+	      if (Array.isArray(fn)) {
+	        return _every(fn, apply);
+	      } else if (typeof fn === "function") {
+	        return fn.apply(thisArg, fns.captures || []);
+	      } else if (typeof fn === "string" && self.resource) {
+	        self.resource[fn].apply(thisArg, fns.captures || []);
+	      }
+	    };
+	    _every(fns, apply);
+	  }
+	};
+
+	Router.prototype.traverse = function(method, path, routes, regexp, filter) {
+	  var fns = [], current, exact, match, next, that;
+	  function filterRoutes(routes) {
+	    if (!filter) {
+	      return routes;
+	    }
+	    function deepCopy(source) {
+	      var result = [];
+	      for (var i = 0; i < source.length; i++) {
+	        result[i] = Array.isArray(source[i]) ? deepCopy(source[i]) : source[i];
+	      }
+	      return result;
+	    }
+	    function applyFilter(fns) {
+	      for (var i = fns.length - 1; i >= 0; i--) {
+	        if (Array.isArray(fns[i])) {
+	          applyFilter(fns[i]);
+	          if (fns[i].length === 0) {
+	            fns.splice(i, 1);
+	          }
+	        } else {
+	          if (!filter(fns[i])) {
+	            fns.splice(i, 1);
+	          }
+	        }
+	      }
+	    }
+	    var newRoutes = deepCopy(routes);
+	    newRoutes.matched = routes.matched;
+	    newRoutes.captures = routes.captures;
+	    newRoutes.after = routes.after.filter(filter);
+	    applyFilter(newRoutes);
+	    return newRoutes;
+	  }
+	  if (path === this.delimiter && routes[method]) {
+	    next = [ [ routes.before, routes[method] ].filter(Boolean) ];
+	    next.after = [ routes.after ].filter(Boolean);
+	    next.matched = true;
+	    next.captures = [];
+	    return filterRoutes(next);
+	  }
+	  for (var r in routes) {
+	    if (routes.hasOwnProperty(r) && (!this._methods[r] || this._methods[r] && typeof routes[r] === "object" && !Array.isArray(routes[r]))) {
+	      current = exact = regexp + this.delimiter + r;
+	      if (!this.strict) {
+	        exact += "[" + this.delimiter + "]?";
+	      }
+	      match = path.match(new RegExp("^" + exact));
+	      if (!match) {
+	        continue;
+	      }
+	      if (match[0] && match[0] == path && routes[r][method]) {
+	        next = [ [ routes[r].before, routes[r][method] ].filter(Boolean) ];
+	        next.after = [ routes[r].after ].filter(Boolean);
+	        next.matched = true;
+	        next.captures = match.slice(1);
+	        if (this.recurse && routes === this.routes) {
+	          next.push([ routes.before, routes.on ].filter(Boolean));
+	          next.after = next.after.concat([ routes.after ].filter(Boolean));
+	        }
+	        return filterRoutes(next);
+	      }
+	      next = this.traverse(method, path, routes[r], current);
+	      if (next.matched) {
+	        if (next.length > 0) {
+	          fns = fns.concat(next);
+	        }
+	        if (this.recurse) {
+	          fns.push([ routes[r].before, routes[r].on ].filter(Boolean));
+	          next.after = next.after.concat([ routes[r].after ].filter(Boolean));
+	          if (routes === this.routes) {
+	            fns.push([ routes["before"], routes["on"] ].filter(Boolean));
+	            next.after = next.after.concat([ routes["after"] ].filter(Boolean));
+	          }
+	        }
+	        fns.matched = true;
+	        fns.captures = next.captures;
+	        fns.after = next.after;
+	        return filterRoutes(fns);
+	      }
+	    }
+	  }
+	  return false;
+	};
+
+	Router.prototype.insert = function(method, path, route, parent) {
+	  var methodType, parentType, isArray, nested, part;
+	  path = path.filter(function(p) {
+	    return p && p.length > 0;
+	  });
+	  parent = parent || this.routes;
+	  part = path.shift();
+	  if (/\:|\*/.test(part) && !/\\d|\\w/.test(part)) {
+	    part = regifyString(part, this.params);
+	  }
+	  if (path.length > 0) {
+	    parent[part] = parent[part] || {};
+	    return this.insert(method, path, route, parent[part]);
+	  }
+	  if (!part && !path.length && parent === this.routes) {
+	    methodType = typeof parent[method];
+	    switch (methodType) {
+	     case "function":
+	      parent[method] = [ parent[method], route ];
+	      return;
+	     case "object":
+	      parent[method].push(route);
+	      return;
+	     case "undefined":
+	      parent[method] = route;
+	      return;
+	    }
+	    return;
+	  }
+	  parentType = typeof parent[part];
+	  isArray = Array.isArray(parent[part]);
+	  if (parent[part] && !isArray && parentType == "object") {
+	    methodType = typeof parent[part][method];
+	    switch (methodType) {
+	     case "function":
+	      parent[part][method] = [ parent[part][method], route ];
+	      return;
+	     case "object":
+	      parent[part][method].push(route);
+	      return;
+	     case "undefined":
+	      parent[part][method] = route;
+	      return;
+	    }
+	  } else if (parentType == "undefined") {
+	    nested = {};
+	    nested[method] = route;
+	    parent[part] = nested;
+	    return;
+	  }
+	  throw new Error("Invalid route context: " + parentType);
+	};
+
+
+
+	Router.prototype.extend = function(methods) {
+	  var self = this, len = methods.length, i;
+	  function extend(method) {
+	    self._methods[method] = true;
+	    self[method] = function() {
+	      var extra = arguments.length === 1 ? [ method, "" ] : [ method ];
+	      self.on.apply(self, extra.concat(Array.prototype.slice.call(arguments)));
+	    };
+	  }
+	  for (i = 0; i < len; i++) {
+	    extend(methods[i]);
+	  }
+	};
+
+	Router.prototype.runlist = function(fns) {
+	  var runlist = this.every && this.every.before ? [ this.every.before ].concat(_flatten(fns)) : _flatten(fns);
+	  if (this.every && this.every.on) {
+	    runlist.push(this.every.on);
+	  }
+	  runlist.captures = fns.captures;
+	  runlist.source = fns.source;
+	  return runlist;
+	};
+
+	Router.prototype.mount = function(routes, path) {
+	  if (!routes || typeof routes !== "object" || Array.isArray(routes)) {
+	    return;
+	  }
+	  var self = this;
+	  path = path || [];
+	  if (!Array.isArray(path)) {
+	    path = path.split(self.delimiter);
+	  }
+	  function insertOrMount(route, local) {
+	    var rename = route, parts = route.split(self.delimiter), routeType = typeof routes[route], isRoute = parts[0] === "" || !self._methods[parts[0]], event = isRoute ? "on" : rename;
+	    if (isRoute) {
+	      rename = rename.slice((rename.match(new RegExp("^" + self.delimiter)) || [ "" ])[0].length);
+	      parts.shift();
+	    }
+	    if (isRoute && routeType === "object" && !Array.isArray(routes[route])) {
+	      local = local.concat(parts);
+	      self.mount(routes[route], local);
+	      return;
+	    }
+	    if (isRoute) {
+	      local = local.concat(rename.split(self.delimiter));
+	      local = terminator(local, self.delimiter);
+	    }
+	    self.insert(event, local, routes[route]);
+	  }
+	  for (var route in routes) {
+	    if (routes.hasOwnProperty(route)) {
+	      insertOrMount(route, path.slice(0));
+	    }
+	  }
+	};
+
+
+
+	}(true ? exports : window));
+
+/***/ },
+/* 6 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/**
@@ -15426,7 +16720,7 @@
 
 
 /***/ },
-/* 5 */
+/* 7 */
 /***/ function(module, exports, __webpack_require__) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {(function() {
@@ -15618,7 +16912,7 @@
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 6 */
+/* 8 */
 /***/ function(module, exports, __webpack_require__) {
 
 	module.exports = function(module) {
