@@ -5,12 +5,18 @@
     <script src="js/bundle.js"></script>
   </head>
   <body>
+    <div id="js-fetcher" class="fetcher">
+      <form v-on="submit: fetch(this, $event)">
+        <input class="fetcher__url" type="text" v-model="url">
+        <input type="submit" />
+      </form>
+    </div>
     <div id="js-playlist" class="playlist">
       <li class="playlist__item"
           v-repeat="items"
           v-on="click: play(this)">
         {{ playing ? '&#x25B7;' : '&nbsp;&nbsp;&nbsp;' }}
-        {{title}}
+        {{$index}}. {{title}}
       </li>
     </div>
 
