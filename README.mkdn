@@ -1,0 +1,20 @@
+# Podcast Player
+## Overview
+HTML5 Podcast player(maybe Chrome/Safari only).
+
+## Deploy
+
+## Build
+
+```shell
+# build JavaScript code
+$ npm install
+$ bower install
+$ gulp copy compile
+
+# run Ruby backend
+$ bundle
+$ bundle exec shotgun app.rb
+```
+
+and access to http://localhost:9393/
