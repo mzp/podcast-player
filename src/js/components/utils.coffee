@@ -1,2 +1,8 @@
-exports.add = (x,y) ->
-    x + y
+_ = require 'lodash'
+
+exports.shift = (xs) ->
+  ys = _.clone xs
+  ys.unshift ys.pop()
+  ys
+
+
