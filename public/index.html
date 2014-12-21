@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Hobiron Player</title>
+    <script src="js/bundle.js"></script>
+  </head>
+  <body>
+    <div id="js-playlist" class="playlist">
+      <li class="playlist__item"
+          v-repeat="items"
+          v-on="click: play(this)">
+        {{ playing ? '&#x25B7;' : '&nbsp;&nbsp;&nbsp;' }}
+        {{title}}
+      </li>
+    </div>
+
+    <div id="js-player" class="player">
+      <div v-repeat="items | filterBy 'true' in 'playing'">
+        <h2>{{title}}</h2>
+        <video type="video/mp4" controls width="640" autoplay
+               v-on="ended: playNext(this),
+                     click: playNext(this)"
+               v-attr="src: enclosure.url" >
+        </video>
+      </div>
+    </div>
+  </body>
+</html>
