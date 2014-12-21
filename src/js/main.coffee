@@ -6,6 +6,7 @@ Vue = require 'vue'
 utils = require './components/utils'
 
 Playlist = {
+  url: 'http://feeds.rebuild.fm/rebuildfm',
   items: []
 }
 
@@ -18,7 +19,7 @@ Vue.filter 'short', (value) ->
 window.onload = ->
   new Vue({
     el: '#js-fetcher',
-    data: { url : '' },
+    data: Playlist,
     methods: {
       fetch: (data, e) ->
         # FIXME: this is view's task. Use some cool filter.
@@ -59,6 +60,7 @@ router = new Router()
 router.addRoute '#/play/', (req, next) ->
   # FIXME: validate data.url
   url = "#{location.origin}/items?url=#{req.query.url}"
+  Playlist.url = req.query.url
   XHR.get(url).then (items) ->
     Playlist.items = items
 
