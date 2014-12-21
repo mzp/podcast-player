@@ -4,4 +4,5 @@ gem 'sinatra'
 
 group :development do
   gem 'shotgun'
+  gem 'pry'
 end
