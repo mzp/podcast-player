@@ -60,6 +60,7 @@
 	  utils = __webpack_require__(1);
 
 	  Playlist = {
+	    url: 'http://feeds.rebuild.fm/rebuildfm',
 	    items: []
 	  };
 
@@ -74,9 +75,7 @@
 	  window.onload = function() {
 	    new Vue({
 	      el: '#js-fetcher',
-	      data: {
-	        url: ''
-	      },
+	      data: Playlist,
 	      methods: {
 	        fetch: function(data, e) {
 	          utils.stopEvent(e);
@@ -123,6 +122,7 @@
 	  router.addRoute('#/play/', function(req, next) {
 	    var url;
 	    url = "" + location.origin + "/items?url=" + req.query.url;
+	    Playlist.url = req.query.url;
 	    return XHR.get(url).then(function(items) {
 	      return Playlist.items = items;
 	    });

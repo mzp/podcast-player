@@ -23,7 +23,7 @@
         <div id="js-fetcher" class="fetcher">
           <form v-on="submit: fetch(this, $event)">
             <div class="input-group">
-              <input class="fetcher__url form-control" type="url" value="http://feeds.rebuild.fm/rebuildfm" placeholder="Podcast URL" v-model="url">
+              <input class="fetcher__url form-control" type="url" value="{{url}}" placeholder="Podcast URL" v-model="url">
               <span class="input-group-btn">
                 <button class="btn btn-default" type="submit">
                   <span class="glyphicon glyphicon-headphones" aria-hidden="true"></span>
