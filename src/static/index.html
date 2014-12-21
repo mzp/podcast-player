@@ -1,33 +1,63 @@
 <!doctype html>
 <html>
   <head>
+    <meta content='text/thml; charset=utf-8' http-equiv='content'>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Hobiron Player</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="main.css">
     <script src="js/bundle.js"></script>
   </head>
   <body>
-    <div id="js-fetcher" class="fetcher">
-      <form v-on="submit: fetch(this, $event)">
-        <input class="fetcher__url" type="text" v-model="url">
-        <input type="submit" />
-      </form>
-    </div>
-    <div id="js-playlist" class="playlist">
-      <li class="playlist__item"
-          v-repeat="items"
-          v-on="click: play(this)">
-        {{ playing ? '&#x25B7;' : '&nbsp;&nbsp;&nbsp;' }}
-        {{$index}}. {{title}}
-      </li>
-    </div>
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <a class="navbar-brand" href="#">Hobiron Player</a>
+        </div>
+      </div>
+    </nav>
 
-    <div id="js-player" class="player">
-      <div v-repeat="items | filterBy 'true' in 'playing'">
-        <h2>{{title}}</h2>
-        <video type="video/mp4" controls width="640" autoplay
-               v-on="ended: playNext(this),
-                     click: playNext(this)"
-               v-attr="src: enclosure.url" >
-        </video>
+    <div class="container main">
+      <div class="row">
+        <div id="js-fetcher" class="fetcher">
+          <form v-on="submit: fetch(this, $event)">
+            <div class="input-group">
+              <input class="fetcher__url form-control" type="url" value="http://feeds.rebuild.fm/rebuildfm" placeholder="Podcast URL" v-model="url">
+              <span class="input-group-btn">
+                <button class="btn btn-default" type="submit">
+                  <span class="glyphicon glyphicon-headphones" aria-hidden="true"></span>
+                </button>
+              </span>
+            </div>
+          </form>
+        </div>
+      <div>
+
+      <div class="row">
+        <div id="js-player" class="player col-md-9">
+          <div v-repeat="items | filterBy 'true' in 'playing'">
+            <h2>{{title}}</h2>
+            <video type="video/mp4" controls width="640" autoplay
+                                             v-on="ended: playNext(this),
+                                             click: playNext(this)"
+                                             v-attr="src: enclosure.url" >
+            </video>
+          </div>
+        </div>
+
+        <div id="js-playlist" class="playlist col-md-3">
+          <ul class="list-group">
+            <li class="playlist__item list-group-item"
+                v-repeat="items"
+                v-on="click: play(this)">
+              <span class="{{playing ? 'playlist__bagde--playing' : 'playlist__badge--stop'}}">
+                <span class="glyphicon glyphicon-play" aria-hidden="true"></span>
+              </span>
+              {{title | short}}
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </body>

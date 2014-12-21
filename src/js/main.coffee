@@ -7,6 +7,12 @@ Playlist = {
   items: []
 }
 
+Vue.filter 'short', (value) ->
+  if value.length < 20
+    value
+  else
+    value.substr(0, 20) + "..."
+
 window.onload = ->
   new Vue({
     el: '#js-fetcher',

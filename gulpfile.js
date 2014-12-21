@@ -9,5 +9,6 @@ gulp.task('watch', ['webpack'], function() {
   gulp.watch('src/**/*.coffee', ['coffee']);
   gulp.watch('temp/**/*.js', ['webpack']);
   gulp.watch('src/**/*.html', ['copy']);
+  gulp.watch('src/**/*.css', ['copy']);
   gulp.task('default', ['webpack', 'copy']);
 });

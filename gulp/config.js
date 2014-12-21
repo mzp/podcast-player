@@ -33,7 +33,8 @@ module.exports = {
   // 単純なコピー
   copy: {
       src: [
-        src + '/static/index.html'
+        src + '/static/index.html',
+        src + '/static/main.css'
       ],
       dest: dest
   }
